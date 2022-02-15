@@ -170,7 +170,7 @@ android {
 
 
     defaultConfig {
-        applicationId "com.myairtelapp"
+        applicationId "com.bugnsag_repro"
         minSdkVersion project.ext.min_sdk_version
         targetSdkVersion project.ext.target_sdk_version
         vectorDrawables.useSupportLibrary = true
@@ -309,13 +309,9 @@ def gitBranchName() {
     return 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
 }
 
-/** generate main build tasks
- *  generated tasks : [airtelOneDebugAssemble, airtelOneReleaseAssemble, airtelOneStagingAssemble
- *                     airtelOneQaAssemble,airtelOneDummyAssemble]
- **/
 android.buildTypes.all { buildType ->
     android.productFlavors.each { flavor ->
-        task("airtelOne${flavor.name.capitalize()}${buildType.name.capitalize()}Assemble") {
+        task("bugsnagRepro${flavor.name.capitalize()}${buildType.name.capitalize()}Assemble") {
             if (buildType.name == android.buildTypes.release.name) {
                 dependsOn "release"
             } else {
@@ -336,7 +332,7 @@ def renameApk() {
             name = "${variant.name}-${variant.versionCode}-${variant.versionName}" + "_" +
                     gitBranchName() + ".apk"
         } else {
-            name = "airtelOne-${variant.name}-${variant.versionCode}-${variant.versionName}-RELEASE.apk"
+            name = "bugsnagRepro-${variant.name}-${variant.versionCode}-${variant.versionName}-RELEASE.apk"
         }
         variant.outputs.all {
             outputFileName = name
@@ -580,27 +576,6 @@ def getCurrentGitBranch() {
     } catch (e) {
     }
     return "\"" + gitBranch + "\""
-}
-
-task installQaProdAAB{
-    doLast{
-        try{
-            def isBundleToolInstalled = 'bundletool version'.execute()
-            isBundleToolInstalled.waitFor()
-            System.out.println("Bundle Tool version is installed: " + isBundleToolInstalled.text.trim())
-            System.out.println("pwd: " + 'pwd'.execute().text.trim())
-            if(isBundleToolInstalled.exitValue() == 0){
-                def runBundleToolTask = 'bundletool build-apks --bundle=app/build/outputs/bundle/playstoreQaProd/app-playstore-qaProd.aab --output=app/build/outputs/bundle/release.apks'.execute()
-                System.out.println(runBundleToolTask.text)
-                def installToDevice = 'bundletool install-apks --apks=app/build/outputs/bundle/release.apks'.execute()
-                System.out.println(installToDevice.text)
-                'adb shell am start -n "com.myairtelapp.debug/com.myairtelapp.home.views.activities.SplashScreenActivity" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER'.execute()
-            }
-        } catch (ignored) {
-            ignored.printStackTrace()
-            System.out.println('Install bundletool with command: brew install bundletool')
-        }
-    }
 }
 
 installQaProdAAB.dependsOn ':app:bundleQaProd'
