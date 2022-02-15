@@ -1,0 +1,611 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        jcenter()
+        maven {
+            url "https://maven.google.com" // Google's Maven repository
+        }
+        maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+
+    }
+
+    dependencies {
+        classpath 'net.researchgate:gradle-release:2.6.0'
+    }
+}
+
+plugins {
+    id 'com.android.application'
+}
+//Key and type definitions
+//Comment
+
+project.ext.react = [
+        entryFile            : "index.js",
+        enableHermes         : true,  // clean and rebuild if changing
+        jsBundleDirRelease   : "$buildDir/intermediates/merged_assets/playstoreRelease/out",
+        hermesCommand        : "../../node_modules/hermes-engine/%OS-BIN%/hermesc",
+        cliPath              : "../../node_modules/react-native/cli.js",
+        composeSourceMapsPath: "./node_modules/react-native/scripts/compose-source-maps.js",
+]
+
+apply from: "../../node_modules/react-native/react.gradle"
+
+/**
+ * Set this to true to create two separate APKs instead of one:
+ *   - An APK that only works on ARM devices
+ *   - An APK that only works on x86 devices
+ * The advantage is the size of the APK is reduced by about 4MB.
+ * Upload all the APKs to the Play Store and people will download
+ * the correct one based on the CPU architecture of their device.
+ */
+def enableSeparateBuildPerCPUArchitecture = false
+
+/**
+ * Run Proguard to shrink the Java bytecode in release builds.
+ */
+def enableProguardInReleaseBuilds = false
+
+/**
+ * The preferred build flavor of JavaScriptCore.
+ *
+ * For example, to use the international variant, you can use:
+ * `def jscFlavor = 'org.webkit:android-jsc-intl:+'`
+ *
+ * The international variant includes ICU i18n library and necessary data
+ * allowing to use e.g. `Date.toLocaleString` and `String.localeCompare` that
+ * give correct results when using with locales other than en-US.  Note that
+ * this variant is about 6MiB larger per architecture than default.
+ */
+def jscFlavor = 'org.webkit:android-jsc:+'
+
+/**
+ * Whether to enable the Hermes VM.
+ *
+ * This should be set on project.ext.react and mirrored here.  If it is not set
+ * on project.ext.react, JavaScript will not be compiled to Hermes Bytecode
+ * and the benefits of using Hermes will therefore be sharply reduced.
+ */
+def enableHermes = project.ext.react.get("enableHermes", true)
+
+
+boolean isAabReleaseBuild = false
+
+apply plugin: 'com.google.firebase.firebase-perf'
+apply plugin: 'com.google.firebase.crashlytics'
+apply plugin: 'net.researchgate.release'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-parcelize'
+apply plugin: 'jacoco'
+apply plugin: 'kotlin-kapt'
+apply plugin: 'com.google.protobuf'
+apply plugin: "com.bugsnag.android.gradle"
+
+android {
+    compileSdkVersion project.ext.compile_sdk_version
+    buildToolsVersion '30.0.3'
+    ndkVersion project.ext.ndk_version
+
+    lintOptions {
+        quiet false
+        abortOnError false
+        ignoreWarnings false
+        disable "ResourceType"
+    }
+    sourceSets {
+        test {
+            java {
+                // srcDirs 'src/test','src/Test'
+            }
+        }
+    }
+    dexOptions {
+        javaMaxHeapSize "4g"
+    }
+
+    buildFeatures {
+        dataBinding true
+        viewBinding true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    
+
+    def taskName = getGradle().getStartParameter().getTaskRequests().toString()
+
+    packagingOptions {
+        pickFirst 'org/apache/xml/security/resource/**'
+        pickFirst 'signer.crt'
+        if (enableHermes) {
+            exclude "**/libjsc*.so"
+            if (taskName.toLowerCase().contains("release")) {
+                exclude '**/libhermes-inspector.so'
+                exclude '**/libhermes-executor-debug.so'
+            } else {
+                exclude '**/libhermes-executor-release.so'
+            }
+        }
+    }
+
+    configurations.all {
+        resolutionStrategy {
+            force "com.facebook.soloader:soloader:$facebook_soloader"
+            force "com.github.bumptech.glide:glide:$glide_version"
+            force "com.github.bumptech.glide:okhttp3-integration:$glide_version"
+            force "com.github.bumptech.glide:annotations:$glide_version"
+        }
+    }
+
+    //dependency resolution
+    configurations.all {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'com.squareup.retrofit2' && details.requested.name == 'retrofit') {
+                details.useVersion project.ext.retrofit_version
+            }
+
+            if (details.requested.group == 'com.google.code.gson' && details.requested.name == 'gson') {
+                details.useVersion project.ext.google_gson_version
+            }
+
+            if (details.requested.group == 'androidx.lifecycle' && details.requested.name == 'lifecycle-extensions') {
+                details.useVersion project.ext.lifecycle_extensions
+            }
+
+            if (details.requested.group == 'com.crashlytics.sdk.android' && details.requested.name == 'crashlytics') {
+                details.useVersion project.ext.crashlyticsVersion
+            }
+
+            if (details.requested.group == 'com.airbnb.android' && details.requested.name == 'lottie') {
+                details.useVersion project.ext.lottieVersion
+            }
+        }
+    }
+
+
+    defaultConfig {
+        applicationId "com.myairtelapp"
+        minSdkVersion project.ext.min_sdk_version
+        targetSdkVersion project.ext.target_sdk_version
+        vectorDrawables.useSupportLibrary = true
+        versionCode 1
+        versionName "1.0.0"
+        
+
+        multiDexEnabled true
+        ndk {
+            //as per https://android.jlelse.eu/controlling-apk-size-when-using-native-libraries-45c6c0e5b70a
+            // there is not a single device with mips -- need to update this if there are some new ones.
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+        }
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            proguardFile getDefaultProguardFile('proguard-android-optimize.txt')
+            proguardFile 'proguard-rules.pro'
+            minifyEnabled true
+        }
+        debug {
+            debuggable true
+            testCoverageEnabled false //enable it to run jacoco test coverage task.
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'),
+                    'proguard-rules.pro'
+            applicationIdSuffix ".debug"
+            matchingFallbacks = ['debug']
+
+            FirebasePerformance {
+                // Set this flag to 'false' to disable @AddTrace annotation processing and
+                // automatic HTTP/S network request monitoring
+                // for a specific build variant at compile time.
+                instrumentationEnabled false
+            }
+        }
+
+        aabRelease {
+            proguardFile getDefaultProguardFile('proguard-android-optimize.txt')
+            proguardFile 'proguard-rules.pro'
+            minifyEnabled true
+            isAabReleaseBuild = true
+            matchingFallbacks = ['release']
+        }
+
+        qaRelease.initWith(buildTypes.debug)
+        qaRelease {
+            minifyEnabled true
+        }
+
+        qaProd.initWith(buildTypes.debug)
+        qaProd {
+        }
+
+
+        qaPreProd.initWith(buildTypes.qaProd)
+        qaPreProd {
+        }
+
+        qaAmStage.initWith(buildTypes.debug)
+        qaAmStage {
+            
+        }
+
+
+        qaAmProd.initWith(buildTypes.debug)
+        qaAmProd {
+            
+        }
+
+        qaApiTestCloud.initWith(buildTypes.qaAmProd)
+        qaApiTestCloud {
+           
+        }
+
+        selfcareQA.initWith(buildTypes.qaAmProd)
+        selfcareQA {
+            
+        }
+
+        selfcareDev.initWith(buildTypes.qaAmProd)
+        selfcareDev {
+            
+        }
+
+        selfcarePreProd.initWith(buildTypes.qaAmProd)
+        selfcarePreProd {
+           
+        }
+
+        qaApiTestMyCloud.initWith(buildTypes.qaApiTestCloud)
+        qaApiTestMyCloud {
+        }
+
+        qaAmStageSIT.initWith(buildTypes.qaAmStage)
+        qaAmStageSIT {
+           
+        }
+
+        qaAmStageCBS.initWith(buildTypes.qaAmStage)
+        qaAmStageCBS {
+           
+        }
+
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    testOptions {
+        unitTests.returnDefaultValues = true
+        kotlinOptions {
+            jvmTarget = JavaVersion.VERSION_1_8.toString()
+        }
+    }
+
+    bundle {
+        density { enableSplit true }
+        abi { enableSplit true }
+        language { enableSplit = true }
+    }
+
+    configurations {
+        implementation.exclude module:'protobuf-lite'
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+
+def gitBranchName() {
+    return 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
+}
+
+/** generate main build tasks
+ *  generated tasks : [airtelOneDebugAssemble, airtelOneReleaseAssemble, airtelOneStagingAssemble
+ *                     airtelOneQaAssemble,airtelOneDummyAssemble]
+ **/
+android.buildTypes.all { buildType ->
+    android.productFlavors.each { flavor ->
+        task("airtelOne${flavor.name.capitalize()}${buildType.name.capitalize()}Assemble") {
+            if (buildType.name == android.buildTypes.release.name) {
+                dependsOn "release"
+            } else {
+                dependsOn "assemble${flavor.name.capitalize()}${buildType.name.capitalize()}"
+            }
+        }
+        renameApk()
+    }
+}
+/**
+ * rename the generated apk.
+ * use SNAPSHOT for intermediate builds
+ */
+def renameApk() {
+    android.applicationVariants.all { variant ->
+        def name
+        if (variant.buildType.name != android.buildTypes.release.name) {
+            name = "${variant.name}-${variant.versionCode}-${variant.versionName}" + "_" +
+                    gitBranchName() + ".apk"
+        } else {
+            name = "airtelOne-${variant.name}-${variant.versionCode}-${variant.versionName}-RELEASE.apk"
+        }
+        variant.outputs.all {
+            outputFileName = name
+        }
+    }
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name == 'generateReleaseBuildConfig') {
+        task.dependsOn 'updateVersionProperties'
+    }
+    if (task.name.toLowerCase().contains("bugsnag") && isAabReleaseBuild) {
+        task.enabled = false
+    }
+}
+/*
+Override release plugin task and update version properties file.
+ */
+task('updateVersionProperties') {
+    doLast {
+        def incVersion = manifestVersionCode + 1
+        props.setProperty(PropertyVersionCode, incVersion.toString())
+        def appVersion = manifestVersionName.split("\\.")
+        def majorVersion = appVersion[0]
+        def minorVersion = appVersion[1]
+        def patchVersion = appVersion[2]
+        def updatePatchVersion = patchVersion.toInteger() + 1
+        def newVersionName = "${majorVersion}.${minorVersion}.${updatePatchVersion}"
+        props.setProperty(PropertyVersionName, newVersionName)
+        def writer = new FileWriter(file(PropertiesFile))
+        try {
+            props.store(writer, 'Manifest Version Properties')
+            writer.flush()
+        } finally {
+            writer.close()
+        }
+    }
+}
+
+afterEvaluate {
+    android.buildTypes.all { buildType ->
+        android.productFlavors.each { flavor ->
+            def taskName = "process${flavor.name.capitalize()}${buildType.name.capitalize()}GoogleServices"
+            if (buildType.name == android.buildTypes.release.name || buildType.name == android.buildTypes.aabRelease.name) {
+                project.tasks.findByName(taskName)?.dependsOn switchToRelease
+            } else {
+                project.tasks.findByName(taskName)?.dependsOn switchToDebug
+            }
+        }
+    }
+}
+
+def appModuleRootFolder = '.'
+def srcDir = 'src'
+
+
+def getDate() {
+    def date = new Date()
+    def formattedDate = date.format("dd-MM'T'HH-mm")
+    return formattedDate
+}
+
+repositories {
+    mavenCentral()
+
+    jcenter()
+    maven {
+        url 'https://maven.google.com/'
+        name 'Google'
+    }
+
+}
+
+protobuf {
+    protoc { artifact = 'com.google.protobuf:protoc:3.12.0' }
+    plugins {
+        grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.36.0'
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java { option 'lite' }
+            }
+            task.plugins {
+                grpc {
+                    option 'lite' }
+            }
+        }
+    }
+}
+
+dependencies {
+
+    api 'com.jakewharton:butterknife:10.0.0'
+    implementation 'androidx.appcompat:appcompat:1.2.0'
+    kapt 'com.jakewharton:butterknife-compiler:10.0.0'
+
+    implementation('com.google.firebase:firebase-crashlytics:17.4.1') {
+        transitive = true
+    }
+
+    implementation 'com.google.firebase:firebase-analytics:18.0.3'
+
+    implementation ("com.github.bumptech.glide:glide:$glide_version") {
+        exclude group: "com.android.support"
+    }
+    implementation "com.github.bumptech.glide:annotations:$glide_version"
+    kapt "com.github.bumptech.glide:compiler:$glide_version"
+
+
+    implementation "com.google.firebase:firebase-core:${firebase_core}"
+    implementation "com.google.firebase:firebase-messaging:${firebase_messaging}"
+
+
+    api "com.google.code.gson:gson:$google_gson_version"
+
+
+    implementation "com.google.firebase:firebase-config:${firebase_config}"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+
+    implementation "com.google.firebase:firebase-perf:${firebase_perf}"
+    api 'com.google.android.play:core:1.10.0'
+
+    api 'com.squareup.retrofit2:retrofit:2.5.0'
+    api 'com.squareup.retrofit2:converter-gson:2.5.0'
+    api 'com.squareup.retrofit2:converter-scalars:2.5.0'
+    implementation "com.squareup.okhttp3:logging-interceptor:$okhttp_version"
+
+    // Payment SDK dependeny
+    implementation 'com.squareup.retrofit2:adapter-rxjava3:2.9.0'
+    implementation 'io.reactivex.rxjava3:rxandroid:3.0.0'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.2.0'
+    implementation "androidx.startup:startup-runtime:1.0.0"
+    implementation "androidx.fragment:fragment-ktx:1.3.6"
+    implementation "androidx.security:security-crypto:1.1.0-alpha03"
+    implementation 'com.google.android.material:material:1.3.0'
+
+
+
+    api 'io.reactivex.rxjava2:rxandroid:2.1.0'
+
+
+    //AndroidX Libs [Start]
+    implementation "androidx.browser:browser:1.0.0"
+    api "androidx.constraintlayout:constraintlayout:$x_constraintlayout"
+    implementation "androidx.gridlayout:gridlayout:$x_gridlayout"
+    implementation "androidx.legacy:legacy-support-v4:$x_legacy_support_v4"
+    implementation "androidx.cardview:cardview:$x_cardview"
+    api "androidx.recyclerview:recyclerview:$x_recyclerview"
+    api "com.google.android.material:material:$x_material"
+    implementation "androidx.palette:palette:1.0.0"
+    api "androidx.lifecycle:lifecycle-extensions:2.0.0"
+    implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
+    implementation "androidx.legacy:legacy-support-v4:$x_legacy_support_v4"
+    api 'androidx.multidex:multidex:2.0.0'
+
+
+
+    androidTestImplementation 'androidx.test:runner:1.1.0'
+    androidTestImplementation 'androidx.test:rules:1.1.0'
+    // Optional -- Hamcrest library
+    androidTestImplementation 'org.hamcrest:hamcrest-library:1.3'
+    // Optional -- UI testing with Espresso
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.0'
+    // Optional -- UI testing with UI Automator
+    androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.2.0'
+    //AndroidX Libs [End]
+
+    androidTestImplementation 'junit:junit:4.13.2'
+    //androidTestImplementation 'org.mockito:mockito-core:2.19.0'
+    //androidTestImplementation 'org.mockito:mockito-inline:2.13.0'
+    androidTestImplementation 'org.mockito:mockito-android:3.12.4'
+    androidTestImplementation "androidx.arch.core:core-testing:2.1.0"
+    //androidTestImplementation 'org.robolectric:robolectric:4.1'
+
+
+    testImplementation 'junit:junit:4.13.2'
+    //testImplementation 'org.mockito:mockito-core:3.12.4'
+    testImplementation 'org.mockito:mockito-inline:3.12.4'
+    // testImplementation 'org.mockito:mockito-android:3.12.4'
+    testImplementation 'org.powermock:powermock-api-mockito2:2.0.0-beta.5'
+    testImplementation "org.powermock:powermock-module-junit4:2.0.0-beta.5"
+    testImplementation 'org.powermock:powermock-core:2.0.0-beta.5'
+    testImplementation "androidx.arch.core:core-testing:2.1.0"
+
+    // mocking static void methods
+    testImplementation "io.mockk:mockk:1.12.0"
+
+    //react-native dependency
+//    api "com.facebook.react:react-native:+" // From node_modules
+    implementation project(':ReactAndroid') // from source
+
+    if (enableHermes) {
+        def hermesPath = "../../node_modules/hermes-engine/android/"
+//        debugImplementation files(hermesPath + "hermes-debug.aar")
+//        releaseImplementation files(hermesPath + "hermes-release.aar")
+        android.buildTypes.each { type ->
+            if (type.name == android.buildTypes.release.name || type.name == android.buildTypes.aabRelease.name) {
+                "${type.name}Implementation" files(hermesPath + "hermes-release.aar")
+            } else {
+                "${type.name}Implementation" files(hermesPath + "hermes-debug.aar")
+            }
+        }
+    } else {
+        implementation jscFlavor
+    }
+    implementation 'javax.annotation:javax.annotation-api:1.2'
+
+    implementation 'androidx.savedstate:savedstate:1.0.0'
+
+
+    implementation("androidx.core:core:1.3.1")
+    implementation("androidx.appcompat:appcompat:1.2.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.2.0")
+
+    //for bugsnag
+    implementation "com.bugsnag:bugsnag-plugin-react-native:5.19.2"
+}
+
+//Increase error count
+gradle.projectsEvaluated {
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << "-Xmaxerrs" << "500" // or whatever number you want
+    }
+}
+
+apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+applyNativeModulesAppBuildGradle(project)
+
+def getCurrentGitBranch() {
+    def gitBranch = "Unknown branch"
+    try {
+        def workingDir = new File("${project.projectDir}")
+        def result = 'git rev-parse --abbrev-ref HEAD'.execute(null, workingDir)
+        result.waitFor()
+        if (result.exitValue() == 0) {
+            gitBranch = result.text.trim()
+        }
+    } catch (e) {
+    }
+    return "\"" + gitBranch + "\""
+}
+
+task installQaProdAAB{
+    doLast{
+        try{
+            def isBundleToolInstalled = 'bundletool version'.execute()
+            isBundleToolInstalled.waitFor()
+            System.out.println("Bundle Tool version is installed: " + isBundleToolInstalled.text.trim())
+            System.out.println("pwd: " + 'pwd'.execute().text.trim())
+            if(isBundleToolInstalled.exitValue() == 0){
+                def runBundleToolTask = 'bundletool build-apks --bundle=app/build/outputs/bundle/playstoreQaProd/app-playstore-qaProd.aab --output=app/build/outputs/bundle/release.apks'.execute()
+                System.out.println(runBundleToolTask.text)
+                def installToDevice = 'bundletool install-apks --apks=app/build/outputs/bundle/release.apks'.execute()
+                System.out.println(installToDevice.text)
+                'adb shell am start -n "com.myairtelapp.debug/com.myairtelapp.home.views.activities.SplashScreenActivity" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER'.execute()
+            }
+        } catch (ignored) {
+            ignored.printStackTrace()
+            System.out.println('Install bundletool with command: brew install bundletool')
+        }
+    }
+}
+
+installQaProdAAB.dependsOn ':app:bundleQaProd'
+
+configure(installQaProdAAB) {
+    group = 'installAAB'
+    description = 'Install generated aab files'
+}

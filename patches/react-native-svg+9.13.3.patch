@@ -1,0 +1,18 @@
+diff --git a/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/PathParser.java b/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/PathParser.java
+index d1f393d..5c15e8e 100644
+--- a/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/PathParser.java
++++ b/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/PathParser.java
+@@ -554,7 +554,12 @@ class PathParser {
+                 c = s.charAt(i);
+             }
+         } else if (c != '.') {
+-            throw new Error("InvalidNumber");
++            /*
++             throw new Error("InvalidNumber");
++             commenting this for Bugsnag crash fix
++             https://app.bugsnag.com/airtel-1/airtel-thanks/errors/60693dab6e46da000775acbd?filters[app.release_stage]=production&filters[release.seen_in]=4.40.5%20(5347)
++            */
++          return 0;
+         }
+ 
+         // Consume fraction.
